@@ -14,11 +14,11 @@ Description:
 		Within this directory are the old Data Aquisition Module (DAM) files from last years module.
 		the most current file is the DAM_gps_adc_trans.py which is the setup for the GPS module we will be using in our teams project.
 		
-		I will work on getting a doc up on what the current state of the code is.
+I will work on getting a doc up on what the current state of the code is.
 	
-	Sensor_Packages:
-		Inside the Sensor_packages directory are the files for the Arduino Sensor Array and CANBUS transceiver code.
-		Currently contains no code. Code will be uploaded by end of week 3.
+Sensor_Packages:
+	Inside the Sensor_packages directory are the files for the Arduino Sensor Array and CANBUS transceiver code.
+	Currently contains no code. Code will be uploaded by end of week 3.
 
 USE:
 	When using this repo please keep the master branch clean of all development and untested code.\
