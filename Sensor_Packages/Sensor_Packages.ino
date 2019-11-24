@@ -18,9 +18,11 @@
 
 // Pin Variables
 
-int sensorPin = 0;    // The analog pin ZTE-155's Vout (sense) pin is connected here
-                      // The resolution is 10mV / degrees centigrade with a 
-                      // 500mV offset to allow for negative temeratures
+int tempPin_1 = 19;   // The analog pin ZTE-155's Vout (sense) pin is connected here
+int tempPin_2 = 20;   // The resolution is 10mV / degrees centigrade with a 
+int tempPin_3 = 21;   // 500mV offset to allow for negative temeratures
+int tempPin_4 = 22;   // this pin will serve as the BRAKE temp sensor
+int wSpeed    = 17;   // wheel speed pin variable
 
 
 /*
@@ -36,22 +38,31 @@ void setup()
 void loop()
 {
   // getting the voltage reading from the temp sensor
-  int vReading = analogRead(sensorPin);
+  int volt_1 = analogRead(tempPin_1);
+  int volt_2 = analogRead(tempPin_2);
+  int volt_3 = analogRead(tempPin_3);
+  int volt_4 = analogRead(tempPin_4);
 
   // Converting that reading to a voltage, for 3.3v arduino use 3.3
-  float voltage = reading * 5.0;
-  voltage /= 1024.0;
+  //float voltage = volt_1 * 5.0;
+  //voltage /= 1024.0;
 
   // Print out the voltage
-  Serial.print(voltage); Serial.println(" volts");
+  Serial.print(volt_1); Serial.println(" volts");
+  Serial.print(volt_2); Serial.println(" volts");
+  Serial.print(volt_3); Serial.println(" volts");
+  Serial.print(volt_4); Serial.println(" volts");
 
+  
   // Now print out the tempurature
-  float tempuratureC = (voltage - 0.5) *100;  // Converting from 10mV per degree wit 500mV offset
+  //float temperatureC = (voltage - 0.5) *100;  // Converting from 10mV per degree wit 500mV offset
 
   // to degrees  (( voltage - 500mV) times 100)
 
   // Now convert to fahrenheit
-  float temperatureF = (temperatureC *9.0 / 5.9) + 32.0;
+  //float temperatureF = (temperatureC *9.0 / 5.9) + 32.0;
+
+  //Serial.print(temperatureF); Serial.println(" Degrees F");
 
   delay(1000);  // Waiting for one second.
 }
