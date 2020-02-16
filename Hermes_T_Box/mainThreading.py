@@ -21,9 +21,10 @@ import xlwt
 from xlwt import Workbook
 from math import degrees
 
-global row, buffer
+global row, buffer, isFinished
 row = 1
-buffer = []
+buffer = [struct.pack("if",-1,-1.0)]*17
+isFinished = [False]*4
 
 class ExceptionThread(threading.Thread):
     """ LogThread is a class dedicated to handling
@@ -105,9 +106,9 @@ def loopIMU(num,sheet):
             pitch = degrees(fusionPose[1])
             yaw = degrees(fusionPose[2])
             global buffer
-            buffer.append((0,roll))
-            buffer.append((1,pitch))
-            buffer.append((2,yaw))
+            buffer[0] = struct.pack("if",1,roll)
+            buffer[1] = struct.pack("if",2,pitch)
+            buffer[2] = struct.pack("if",3,yaw)
             global row
             sheet.write(row, 0, str(roll))
             sheet.write(row, 1, str(pitch))
@@ -115,7 +116,9 @@ def loopIMU(num,sheet):
             row+=1
         num-=1
         #print ("Gx=%.2f" %Gx, u'\u00b0'+ "/s", "\tGy=%.2f" %Gy, u'\u00b0'+ "/s", "\tGz=%.2f" %Gz, u'\u00b0'+ "/s", "\tAx=%.2f g" %Ax, "\tAy=%.2f g" %Ay, "\tAz=%.2f g" %Az)     
-        sleep(.01) 
+        sleep(.01)
+    global isFinished
+    isFinished[0] = True
   
 def loopGPS(num,sheet): 
     """ 
@@ -144,7 +147,7 @@ def loopGPS(num,sheet):
             last_print = current
             if not gps.has_fix:
                 # Try again if we don't have a fix yet.
-                print('Waiting for fix...\n')
+                #print('Waiting for fix...\n')
                 continue
             # We have a fix! (gps.has_fix is true)
             # Print out details about the fix like location, date, etc.
@@ -159,8 +162,8 @@ def loopGPS(num,sheet):
             gps_lat = gps.latitude
             gps_long = gps.longitude
             global buffer
-            buffer.append((3,gps_lat))
-            buffer.append((4,gps_long))
+            buffer[3] = struct.pack("if",4,gps_lat)
+            buffer[4] = struct.pack("if",5,gps_long)
             print('Latitude: {0:.6f} degrees'.format(gps_lat))
             print('Longitude: {0:.6f} degrees'.format(gps_long))
             global row
@@ -182,25 +185,30 @@ def loopGPS(num,sheet):
 #            if gps.height_geoid is not None:
 #                print('Height geo ID: {} meters'.format(gps.height_geoid))
             print("\n")
+    global isFinished
+    isFinished[1] = True
 
 def loopCAN(num,sheet):
     print("Opening Can Bus")
     print("Check CAN WIRES If Outputs Are Weird!")
     os.system('sudo ip link set can0 up type can bitrate 500000')
     bus = can.Bus(bustype = 'socketcan',channel='can0')
-    canbus = bus.recv()
+    canbus = bus.recv(0.01)
+    global buffer
     while(num>0):
         c = bus.recv(0.01)
         if(c!=None):
             canbus = list(c.data)
-            global buffer
-            buffer.append((5,canbus))
+            for i,val in enumerate(canbus):
+                buffer[5+i] = struct.pack("if",5+i+1,val)
             global row
             sheet.write(row, 5, str(canbus))
             #print(canbus)
         num-=1
-    
+    global isFinished
+    isFinished[2] = True
     os.system("sudo ip link set can0 down")
+    
     
 def loopOBD2(num,sheet):
     print("Starting OBD2 Reading.. ")
@@ -218,10 +226,9 @@ def loopOBD2(num,sheet):
         for c in carCommands:
             respCommands.append(str(connection.query(c).value))
         global buffer
-        buffer.append((6,respCommands[0]))
-        buffer.append((7,respCommands[1]))
-        buffer.append((8,respCommands[2]))
-        buffer.append((9,respCommands[3]))
+        for i,val in enumerate(respCommands):
+                buffer[13+i] = struct.pack("if",13+i+1,val)
+#        buffer[13:17] = respCommands
         global row
         sheet.write(row, 6, str(respCommands[0]))
         sheet.write(row, 7, str(respCommands[1]))
@@ -229,6 +236,8 @@ def loopOBD2(num,sheet):
         sheet.write(row, 9, str(respCommands[3]))
         num-=1
         time.sleep(0.01)
+    global isFinished
+    isFinished[3] = True
     
 def master(nrf):  # count = 5 will only transmit 5 packets
     """Transmits an incrementing integer every second"""
@@ -236,47 +245,40 @@ def master(nrf):  # count = 5 will only transmit 5 packets
     nrf.open_tx_pipe(address)
     # ensures the nRF24L01 is in TX mode
     nrf.listen = False
-
-    while True:
-        global buffer
-        if(len(buffer)>0):
-            # use struct.pack to packetize your data
-            # into a usable payload
-            b = buffer.pop(0)
-            print(b[1],type(b[1]))
-            if(type(b[1])==list):
-                for ind,val in enumerate(b[1]):
-                    buf = struct.pack('<if', int(b[0]*10+ind), val)
-                    # 'i' means a single 4 byte int value.
-                    # '<' means little endian byte order. this may be optional
-                    print("Sending: {} as struct: {}".format(buf[0], buf[1]))
-                    now = time.monotonic() * 1000  # start timer
-                    result = nrf.send(buf)
-                    if result is None:
-                        print('send() timed out')
-                    elif not result:
-                        print('send() failed')
-                    else:
-                        print('send() successful')
-                    # print timer results despite transmission success
-                    print('Transmission took',
-                          time.monotonic() * 1000 - now, 'ms')
-            else:
-                buf = struct.pack('<if', b[0],float(b[1]))
-                # 'i' means a single 4 byte int value.
-                # '<' means little endian byte order. this may be optional
-                print("Sending: {} as struct: {}".format(buf[0], buf[1]))
-                now = time.monotonic() * 1000  # start timer
-                result = nrf.send(buf)
-                if result is None:
-                    print('send() timed out')
-                elif not result:
-                    print('send() failed')
-                else:
-                    print('send() successful')
-                # print timer results despite transmission success
-                print('Transmission took',
-                      time.monotonic() * 1000 - now, 'ms')
+    
+    global isFinished, buffer
+    start = time.monotonic()
+    success_percentage = 0
+    while (False in isFinished):
+        result = nrf.send(list(filter(lambda i: i!=struct.pack("if",-1,-1.0), buffer)))
+        success_percentage += result.count(True)
+    print("Total Sent: ", success_percentage)
+    print("Total Time: ", time.monotonic() - start)
+    print('Transmission Speed', (time.monotonic() - start)/success_percentage)
+#        for ind,val in enumerate(buffer):
+#            if(val!=-1):
+#                buf = struct.pack('<if', ind,val)
+#                # 'i' means a single 4 byte int value.
+#                # '<' means little endian byte order. this may be optional
+##                print("Sending: {} as struct: {}".format(ind, val))
+#                now = time.monotonic() * 1000  # start timer
+#                result = nrf.send(buf)
+#                if result is None:
+#                    pass
+##                    print('send() timed out')
+#                elif not result:
+#                    pass
+##                    print('send() failed')
+#                else:
+##                    print('send() successful')
+#                    total+=time.monotonic() * 1000 - now
+#                    count+=1
+#                # print timer results despite transmission success
+#                #print('Transmission took',
+#    #                  time.monotonic() * 1000 - now, 'ms')
+#    print("Total time :",time.monotonic() - start)
+#    print("Total Transmitted: ", count)
+#    print("Average Transmission Time for a Data Value: ",str((time.monotonic()- start)/count))
         #time.sleep(0.25)
 
 if __name__ == "__main__":
@@ -328,6 +330,8 @@ if __name__ == "__main__":
     # we'll be using the dynamic payload size feature (enabled by default)
     # initialize the nRF24L01 on the spi bus object
     nrf = RF24(spi, csn, ce)
+    nrf.data_rate = 2
+#    help(nrf)
     
     # creating thread 
 #    t1 = threading.Thread(target=loopIMU, args=(100,)) 
@@ -353,10 +357,10 @@ if __name__ == "__main__":
 #    # wait until thread 4 is completely executed 
 #    t4.join()
         
-    t1 = ExceptionThread("IMU Sensor Failed!",target=loopIMU, args=(100,sheet1)) 
-    t2 = ExceptionThread("GPS Sensor Failed!",target=loopGPS, args=(100,sheet1,))
-    t3 = ExceptionThread("CAN Bus Failed!",target=loopCAN, args=(100,sheet1,))
-    t4 = ExceptionThread("OBD2 Connection Failed!",target=loopOBD2, args=(100,sheet1,))
+    t1 = ExceptionThread("IMU Sensor Failed!",target=loopIMU, args=(1000,sheet1)) 
+    t2 = ExceptionThread("GPS Sensor Failed!",target=loopGPS, args=(1000,sheet1,))
+    t3 = ExceptionThread("CAN Bus Failed!",target=loopCAN, args=(1000,sheet1,))
+    t4 = ExceptionThread("OBD2 Connection Failed!",target=loopOBD2, args=(1000,sheet1,))
     t5 = ExceptionThread("Transmission Failed!",target=master, args=(nrf,))
     
     t1.execute()
